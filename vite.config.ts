@@ -3,7 +3,8 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
-export default defineConfig({
+export default defineConfig(async ({ mode }) => ({
+  base: mode === 'production' ? '/JobLensTracker/' : '/',  // GitHub Pages에 배포하기 위한 base 경로
   plugins: [
     react(),
     runtimeErrorOverlay(),
@@ -27,6 +28,7 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    sourcemap: mode !== 'production',
   },
   server: {
     fs: {
@@ -34,4 +36,4 @@ export default defineConfig({
       deny: ["**/.*"],
     },
   },
-});
+}));
