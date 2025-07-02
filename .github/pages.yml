@@ -1,0 +1,8 @@
+# GitHub Pages 설정
+# 이 파일은 GitHub Pages가 빌드 산출물을 어디서 찾아야 하는지 지정합니다.
+
+# 빌드 산출물이 위치한 디렉토리
+build_dir: dist/public
+
+# 사용자 도메인이 있는 경우 (필요시 주석 해제)
+# cname: joblens.woowahan.com

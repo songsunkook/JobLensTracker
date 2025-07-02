@@ -4,7 +4,7 @@ import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
 export default defineConfig(async ({ mode }) => ({
-  base: mode === 'production' ? '/JobLensTracker/' : '/',  // GitHub Pages에 배포하기 위한 base 경로
+  base: mode === 'production' ? '/' : '/',
   plugins: [
     react(),
     runtimeErrorOverlay(),

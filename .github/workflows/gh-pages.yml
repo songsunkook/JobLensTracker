@@ -28,8 +28,10 @@ jobs:
 
       - name: Build
         run: |
-          npm run build
+          npm install
+          npm run build:client
           cd dist/public
+          echo 'joblens.woowahan.com' > CNAME
           touch .nojekyll
 
       - name: Setup Pages
