@@ -47,16 +47,14 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // Serve static files from public directory
-  app.use(express.static('public'));
-  
-  // Catch-all route to serve index.html for SPA routing
-  app.get('*', (req, res) => {
-    if (req.path.startsWith('/api')) {
-      return res.status(404).json({ message: 'API endpoint not found' });
-    }
-    res.sendFile('index.html', { root: 'public' });
-  });
+  // importantly only setup vite in development and after
+  // setting up all the other routes so the catch-all route
+  // doesn't interfere with the other routes
+  if (app.get("env") === "development") {
+    await setupVite(app, server);
+  } else {
+    serveStatic(app);
+  }
 
   // ALWAYS serve the app on port 5000
   // this serves both the API and the client.

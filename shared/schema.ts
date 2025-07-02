@@ -23,9 +23,6 @@ export const jobPostings = pgTable("job_postings", {
   description: text("description").notNull(),
   requirements: text("requirements").array(),
   preferredSkills: text("preferred_skills").array(),
-  techStack: text("tech_stack").array(),
-  nonTechRequirements: text("non_tech_requirements").array(),
-  jobCategory: text("job_category"),
   salaryMin: integer("salary_min"), // in 만원
   salaryMax: integer("salary_max"), // in 만원
   experienceLevel: text("experience_level").notNull(), // entry, junior, mid, senior, all
@@ -48,22 +45,6 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
-  email: text("email"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const sessions = pgTable("sessions", {
-  id: text("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id),
-  expiresAt: timestamp("expires_at").notNull(),
-});
-
-export const savedFilters = pgTable("saved_filters", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id),
-  name: text("name").notNull(),
-  filterData: text("filter_data").notNull(), // JSON string
-  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const insertCompanySchema = createInsertSchema(companies).omit({
@@ -84,31 +65,17 @@ export const insertBookmarkSchema = createInsertSchema(bookmarks).omit({
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
-  email: true,
-});
-
-export const insertSessionSchema = createInsertSchema(sessions).omit({
-  id: true,
-});
-
-export const insertSavedFilterSchema = createInsertSchema(savedFilters).omit({
-  id: true,
-  createdAt: true,
 });
 
 export type Company = typeof companies.$inferSelect;
 export type JobPosting = typeof jobPostings.$inferSelect;
 export type Bookmark = typeof bookmarks.$inferSelect;
 export type User = typeof users.$inferSelect;
-export type Session = typeof sessions.$inferSelect;
-export type SavedFilter = typeof savedFilters.$inferSelect;
 
 export type InsertCompany = z.infer<typeof insertCompanySchema>;
 export type InsertJobPosting = z.infer<typeof insertJobPostingSchema>;
 export type InsertBookmark = z.infer<typeof insertBookmarkSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
-export type InsertSession = z.infer<typeof insertSessionSchema>;
-export type InsertSavedFilter = z.infer<typeof insertSavedFilterSchema>;
 
 // Extended types for API responses
 export type JobWithCompany = JobPosting & {
@@ -123,10 +90,6 @@ export type FilterOptions = {
   experienceLevel?: string;
   employmentType?: string;
   isRemote?: boolean;
-  techStack?: string[];
-  techStackOperation?: 'AND' | 'OR';
-  jobCategory?: string;
-  nonTechRequirements?: string[];
 };
 
 export type JobStatistics = {
@@ -136,10 +99,6 @@ export type JobStatistics = {
   companies: number;
   topRequirements: Array<{ skill: string; percentage: number }>;
   topPreferredSkills: Array<{ skill: string; percentage: number }>;
-  topTechStack: Array<{ tech: string; percentage: number }>;
-  topNonTechRequirements: Array<{ requirement: string; percentage: number }>;
   salaryDistribution: Array<{ range: string; count: number }>;
   locationStats: Array<{ location: string; count: number }>;
-  trendingTechStack: Array<{ tech: string; growth: number; popularity: number }>;
-  jobCategoryTrends: Array<{ category: string; count: number; growth: number }>;
 };
