@@ -1,6 +1,6 @@
 # JobLens - 취업 시장 분석 서비스
 
-배포 URL: https://joblens-insight-hub.lovable.app/
+배포 URL: https://94608bd3-3859-4dcd-a981-8cf21ae31677-00-2qk5i6jl6g0ca.janeway.replit.dev/
 
 ## 👥 Personas
 
