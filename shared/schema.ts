@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, decimal, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -44,7 +44,20 @@ export const bookmarks = pgTable("bookmarks", {
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
+  email: text("email").notNull().unique(),
   password: text("password").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const savedFilters = pgTable("saved_filters", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: text("name").notNull(),
+  filters: jsonb("filters").notNull(),
+  isDefault: boolean("is_default").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const insertCompanySchema = createInsertSchema(companies).omit({
@@ -82,7 +95,7 @@ export type JobWithCompany = JobPosting & {
   company: Company;
 };
 
-export type FilterOptions = {
+export interface FilterOptions {
   industries?: string[];
   salaryMin?: number;
   salaryMax?: number;
@@ -90,6 +103,8 @@ export type FilterOptions = {
   experienceLevel?: string;
   employmentType?: string;
   isRemote?: boolean;
+  skills?: string[];
+  skillOperator?: 'AND' | 'OR';
 };
 
 export type JobStatistics = {
@@ -102,3 +117,20 @@ export type JobStatistics = {
   salaryDistribution: Array<{ range: string; count: number }>;
   locationStats: Array<{ location: string; count: number }>;
 };
+
+export interface SavedFilter {
+  id: number;
+  userId: number;
+  name: string;
+  filters: FilterOptions;
+  isDefault: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface InsertSavedFilter {
+  userId: number;
+  name: string;
+  filters: FilterOptions;
+  isDefault?: boolean;
+}

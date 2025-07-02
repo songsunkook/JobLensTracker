@@ -15,6 +15,9 @@ export default function Home() {
     experienceLevel: "all",
     employmentType: "full-time",
     isRemote: false,
+    skills: [],
+    skillOperator: 'OR',
+    jobPosition: "",
   });
 
   const handleFilterChange = (newFilters: Partial<FilterState>) => {

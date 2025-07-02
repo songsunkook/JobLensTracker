@@ -1,251 +1,274 @@
+import bcrypt from 'bcryptjs';
+import { v4 as uuidv4 } from 'uuid';
 import { 
-  companies, 
-  jobPostings, 
-  bookmarks, 
-  users,
-  type Company, 
-  type JobPosting, 
-  type Bookmark,
-  type User,
-  type InsertCompany, 
-  type InsertJobPosting, 
-  type InsertBookmark,
-  type InsertUser,
-  type JobWithCompany,
-  type FilterOptions,
-  type JobStatistics
-} from "@shared/schema";
+  Company, 
+  InsertCompany, 
+  JobPosting, 
+  InsertJobPosting, 
+  Bookmark, 
+  InsertBookmark, 
+  User, 
+  InsertUser, 
+  SavedFilter, 
+  InsertSavedFilter,
+  JobStatistics,
+  FilterOptions,
+  JobWithCompany
+} from '@shared/schema';
+
+// Define MarketTrends interface since it's not in the schema
+export interface MarketTrends {
+  popularSkills: { skill: string; percentage: number }[];
+  trendingJobs: { title: string; count: number }[];
+  inDemandIndustries: { industry: string; count: number }[];
+  salaryTrends: { level: string; average: number }[];
+}
+
+interface CreateUserInput {
+  email: string;
+  password: string;
+  name: string;
+}
+
+interface LoginCredentials {
+  email: string;
+  password: string;
+}
 
 export interface IStorage {
   // Company methods
   getCompanies(): Promise<Company[]>;
-  getCompany(id: number): Promise<Company | undefined>;
-  createCompany(company: InsertCompany): Promise<Company>;
+  getCompany(id: number): Promise<Company | null>;
   
   // Job posting methods
-  getJobPostings(filters?: FilterOptions): Promise<JobWithCompany[]>;
-  getJobPosting(id: number): Promise<JobWithCompany | undefined>;
-  createJobPosting(job: InsertJobPosting): Promise<JobPosting>;
-  incrementJobViewCount(id: number): Promise<void>;
+  getJobPostings(filters?: FilterOptions): Promise<JobPosting[]>;
+  getJobPosting(id: number): Promise<JobPosting | null>;
+  incrementViewCount(id: number): Promise<void>;
+  
+  // User methods
+  getUserByEmail(email: string): Promise<User | null>;
+  getUserById(id: string): Promise<User | null>;
+  createUser(userData: Omit<InsertUser, 'id' | 'createdAt' | 'updatedAt'>): Promise<User>;
+  validateUser(email: string, password: string): Promise<User | null>;
   
   // Statistics methods
   getJobStatistics(filters?: FilterOptions): Promise<JobStatistics>;
   
-  // Bookmark methods
-  getBookmarks(userId: string): Promise<JobWithCompany[]>;
-  createBookmark(bookmark: InsertBookmark): Promise<Bookmark>;
-  deleteBookmark(jobId: number, userId: string): Promise<void>;
+  // Market trends methods
+  getMarketTrends(): Promise<MarketTrends>;
   
-  // User methods
-  getUser(id: number): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  // Bookmark methods
+  getBookmarks(userId: string): Promise<JobPosting[]>;
+  createBookmark(bookmark: InsertBookmark): Promise<Bookmark>;
+  deleteBookmark(id: number): Promise<boolean>;
+  isJobBookmarked(userId: string, jobId: number): Promise<boolean>;
+  
+  // Saved filter methods
+  getSavedFilters(userId: string): Promise<SavedFilter[]>;
+  getSavedFilter(id: number): Promise<SavedFilter | null>;
+  createSavedFilter(filter: Omit<InsertSavedFilter, 'id' | 'createdAt' | 'updatedAt'>): Promise<SavedFilter>;
+  updateSavedFilter(id: number, updates: Partial<Omit<InsertSavedFilter, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>): Promise<SavedFilter | null>;
+  deleteSavedFilter(id: number): Promise<boolean>;
+  setDefaultFilter(userId: string, id: number): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
-  private companies: Map<number, Company>;
-  private jobPostings: Map<number, JobPosting>;
-  private bookmarks: Map<number, Bookmark>;
-  private users: Map<number, User>;
-  private currentCompanyId: number;
-  private currentJobId: number;
-  private currentBookmarkId: number;
-  private currentUserId: number;
+  private companies: Map<number, Company> = new Map();
+  private jobPostings: Map<number, JobPosting> = new Map();
+  private bookmarks: Map<number, Bookmark> = new Map();
+  private users: Map<string, User> = new Map();
+  private savedFilters: Map<number, SavedFilter> = new Map();
+  private nextCompanyId = 1;
+  private nextJobId = 1;
+  private nextUserId = 1;
+  private nextBookmarkId = 1;
+  private nextFilterId = 1;
+  private currentJobId = 1;
+  private currentBookmarkId = 1;
+  private currentFilterId = 1;
+  private marketTrends: MarketTrends = {
+    popularSkills: [],
+    trendingJobs: [],
+    inDemandIndustries: [],
+    salaryTrends: []
+  };
 
   constructor() {
+    // Initialize all maps
     this.companies = new Map();
     this.jobPostings = new Map();
     this.bookmarks = new Map();
     this.users = new Map();
-    this.currentCompanyId = 1;
-    this.currentJobId = 1;
-    this.currentBookmarkId = 1;
-    this.currentUserId = 1;
+    this.savedFilters = new Map();
     
+    // Initialize counters
+    this.nextCompanyId = 1;
+    this.nextJobId = 1;
+    this.nextUserId = 1;
+    this.nextBookmarkId = 1;
+    this.nextFilterId = 1;
+    
+    // Initialize market trends
+    this.marketTrends = {
+      popularSkills: [],
+      trendingJobs: [],
+      inDemandIndustries: [],
+      salaryTrends: []
+    };
+    
+    // Load initial data
     this.initializeData();
   }
 
-  private initializeData() {
-    // Initialize with Korean tech companies
-    const initialCompanies: InsertCompany[] = [
-      {
-        name: "카카오페이",
-        industry: "핀테크",
-        location: "판교",
-        address: "경기도 성남시 분당구 판교역로 235",
-        latitude: "37.4020",
-        longitude: "127.1080",
-        description: "모바일 간편결제 서비스",
-        website: "https://www.kakaopay.com",
-        size: "large",
-        culture: ["유연근무", "자율복장", "점심지원"]
-      },
-      {
-        name: "토스",
-        industry: "핀테크",
-        location: "서울 강남",
-        address: "서울특별시 강남구 테헤란로 133",
-        latitude: "37.5008",
-        longitude: "127.0358",
-        description: "금융 슈퍼앱",
-        website: "https://toss.im",
-        size: "large",
-        culture: ["수평조직", "성과중심", "자유로운분위기"]
-      },
-      {
-        name: "당근마켓",
-        industry: "IT/소프트웨어",
-        location: "서울 송파",
-        address: "서울특별시 송파구 중대로 135",
-        latitude: "37.5157",
-        longitude: "127.1026",
-        description: "동네 커뮤니티 플랫폼",
-        website: "https://www.daangn.com",
-        size: "medium",
-        culture: ["재택근무", "자율출퇴근", "펫친화적"]
-      },
-      {
-        name: "네이버",
-        industry: "IT/소프트웨어",
-        location: "판교",
-        address: "경기도 성남시 분당구 정자일로 95",
-        latitude: "37.3595",
-        longitude: "127.1052",
-        description: "글로벌 ICT 플랫폼",
-        website: "https://www.navercorp.com",
-        size: "large",
-        culture: ["복지충실", "교육지원", "글로벌"]
-      },
-      {
-        name: "라인",
-        industry: "IT/소프트웨어",
-        location: "판교",
-        address: "경기도 성남시 분당구 정자일로 95",
-        latitude: "37.3595",
-        longitude: "127.1052",
-        description: "글로벌 메신저 플랫폼",
-        website: "https://linecorp.com",
-        size: "large",
-        culture: ["글로벌", "다양성", "소통중시"]
-      },
-      {
-        name: "쿠팡",
-        industry: "이커머스",
-        location: "서울 송파",
-        address: "서울특별시 송파구 송파대로 570",
-        latitude: "37.5172",
-        longitude: "127.1047",
-        description: "이커머스 플랫폼",
-        website: "https://www.coupang.com",
-        size: "large",
-        culture: ["빠른성장", "글로벌", "혁신적"]
-      }
-    ];
+  private async initializeData() {
+    try {
+      // Create initial companies
+      await this.createCompany({
+        name: 'WooTech Inc.',
+        industry: 'Technology',
+        location: 'Seoul, South Korea',
+        description: 'Leading tech company in South Korea',
+        website: 'https://wootech.co.kr',
+        size: '1001-5000',
+        culture: ['Innovation', 'Collaboration', 'Excellence']
+      } as InsertCompany);
+      const initialCompanies: InsertCompany[] = [
+        {
+          name: "카카오페이",
+          industry: "핀테크",
+          location: "서울 강남",
+          address: "서울특별시 강남구 테헤란로 133",
+          latitude: "37.5008",
+          longitude: "127.0358",
+          description: "금융 슈퍼앱",
+          website: "https://toss.im",
+          size: "large",
+          culture: ["수평조직", "성과중심", "자유로운분위기"]
+        },
+        {
+          name: "당근마켓",
+          industry: "IT/소프트웨어",
+          location: "서울 송파",
+          address: "서울특별시 송파구 중대로 135",
+          latitude: "37.5157",
+          longitude: "127.1026",
+          description: "동네 커뮤니티 플랫폼",
+          website: "https://www.daangn.com",
+          size: "medium",
+          culture: ["재택근무", "자율출퇴근", "펫친화적"]
+        },
+        {
+          name: "네이버",
+          industry: "IT/소프트웨어",
+          location: "판교",
+          address: "경기도 성남시 분당구 정자일로 95",
+          latitude: "37.3595",
+          longitude: "127.1052",
+          description: "글로벌 ICT 플랫폼",
+          website: "https://www.navercorp.com",
+          size: "large",
+          culture: ["복지충실", "교육지원", "글로벌"]
+        },
+        {
+          name: "라인",
+          industry: "IT/소프트웨어",
+          location: "판교",
+          address: "경기도 성남시 분당구 정자일로 95",
+          latitude: "37.3595",
+          longitude: "127.1052",
+          description: "글로벌 메신저 플랫폼",
+          website: "https://linecorp.com",
+          size: "large",
+          culture: ["글로벌", "다양성", "소통중시"]
+        },
+        {
+          name: "쿠팡",
+          industry: "이커머스",
+          location: "서울 송파",
+          address: "서울특별시 송파구 송파대로 570",
+          latitude: "37.5172",
+          longitude: "127.1047",
+          description: "이커머스 플랫폼",
+          website: "https://www.coupang.com",
+          size: "large",
+          culture: ["빠른성장", "글로벌", "혁신적"]
+        }
+      ];
 
-    initialCompanies.forEach(company => {
-      this.createCompany(company);
-    });
+      // Create companies
+      await Promise.all(initialCompanies.map(company => this.createCompany(company)));
+      
+      // Initialize admin user
+      await this.createUser({
+        username: 'admin',
+        password: 'admin123'
+      });
+      
+      // Initialize test user
+      await this.createUser({
+        username: 'testuser',
+        password: 'test123'
+      });
+      
+      // Initialize job postings
+      const initialJobs: InsertJobPosting[] = [
+        {
+          companyId: 1, // 카카오페이
+          title: "프론트엔드 개발자",
+          description: "React 기반 웹 서비스 개발",
+          requirements: ["JavaScript", "React", "TypeScript", "HTML/CSS"],
+          preferredSkills: ["Next.js", "Redux", "Webpack", "Jest"],
+          salaryMin: 4000,
+          salaryMax: 6000,
+          experienceLevel: "junior",
+          employmentType: "full-time",
+          isRemote: false,
+          deadline: new Date("2025-08-01")
+        },
+        {
+          companyId: 2, // 토스
+          title: "백엔드 개발자",
+          description: "대규모 트래픽 처리 시스템 개발",
+          requirements: ["Java", "Spring Boot", "MySQL", "Redis"],
+          preferredSkills: ["Kafka", "Kubernetes", "MSA", "AWS"],
+          salaryMin: 5000,
+          salaryMax: 8000,
+          experienceLevel: "mid",
+          employmentType: "full-time",
+          isRemote: false,
+          deadline: new Date("2025-07-25")
+        }
+      ];
 
-    // Initialize job postings
-    const initialJobs: InsertJobPosting[] = [
-      {
-        companyId: 1, // 카카오페이
-        title: "프론트엔드 개발자",
-        description: "React 기반 웹 서비스 개발",
-        requirements: ["JavaScript", "React", "TypeScript", "HTML/CSS"],
-        preferredSkills: ["Next.js", "Redux", "Webpack", "Jest"],
-        salaryMin: 4000,
-        salaryMax: 6000,
-        experienceLevel: "junior",
-        employmentType: "full-time",
-        isRemote: false,
-        deadline: new Date("2025-08-01")
-      },
-      {
-        companyId: 2, // 토스
-        title: "백엔드 개발자",
-        description: "대규모 트래픽 처리 시스템 개발",
-        requirements: ["Java", "Spring Boot", "MySQL", "Redis"],
-        preferredSkills: ["Kafka", "Kubernetes", "MSA", "AWS"],
-        salaryMin: 5000,
-        salaryMax: 8000,
-        experienceLevel: "mid",
-        employmentType: "full-time",
-        isRemote: false,
-        deadline: new Date("2025-07-25")
-      },
-      {
-        companyId: 3, // 당근마켓
-        title: "DevOps 엔지니어",
-        description: "클라우드 인프라 관리 및 자동화",
-        requirements: ["AWS", "Docker", "Kubernetes", "Linux"],
-        preferredSkills: ["Terraform", "Jenkins", "Prometheus", "Grafana"],
-        salaryMin: 4500,
-        salaryMax: 7000,
-        experienceLevel: "mid",
-        employmentType: "full-time",
-        isRemote: true,
-        deadline: new Date("2025-08-15")
-      },
-      {
-        companyId: 4, // 네이버
-        title: "AI 엔지니어",
-        description: "머신러닝 모델 개발 및 서비스 적용",
-        requirements: ["Python", "TensorFlow", "PyTorch", "SQL"],
-        preferredSkills: ["MLOps", "Kubeflow", "Docker", "Spark"],
-        salaryMin: 5500,
-        salaryMax: 9000,
-        experienceLevel: "senior",
-        employmentType: "full-time",
-        isRemote: false,
-        deadline: new Date("2025-07-30")
-      },
-      {
-        companyId: 5, // 라인
-        title: "모바일 개발자 (iOS)",
-        description: "라인 메신저 iOS 앱 개발",
-        requirements: ["Swift", "iOS SDK", "Objective-C", "Git"],
-        preferredSkills: ["SwiftUI", "Combine", "RxSwift", "Fastlane"],
-        salaryMin: 4500,
-        salaryMax: 7500,
-        experienceLevel: "mid",
-        employmentType: "full-time",
-        isRemote: false,
-        deadline: new Date("2025-08-10")
-      },
-      {
-        companyId: 6, // 쿠팡
-        title: "데이터 엔지니어",
-        description: "대용량 데이터 파이프라인 구축",
-        requirements: ["Python", "Spark", "Hadoop", "SQL"],
-        preferredSkills: ["Airflow", "Kafka", "Elasticsearch", "AWS"],
-        salaryMin: 5000,
-        salaryMax: 8500,
-        experienceLevel: "mid",
-        employmentType: "full-time",
-        isRemote: false,
-        deadline: new Date("2025-08-05")
-      }
-    ];
-
-    initialJobs.forEach(job => {
-      this.createJobPosting(job);
-    });
+      await Promise.all(initialJobs.map(job => this.createJobPosting(job)));
+      
+      console.log('Initial data loaded successfully');
+    } catch (error) {
+      console.error('Error initializing data:', error);
+      throw error;
+    }
   }
 
+  // Company methods
   async getCompanies(): Promise<Company[]> {
     return Array.from(this.companies.values());
   }
 
-  async getCompany(id: number): Promise<Company | undefined> {
-    return this.companies.get(id);
+  async getCompany(id: number): Promise<Company | null> {
+    const company = this.companies.get(id);
+    return company ? { ...company } : null;
   }
 
   async createCompany(insertCompany: InsertCompany): Promise<Company> {
-    const id = this.currentCompanyId++;
-    const company: Company = { 
-      ...insertCompany, 
+    const id = this.nextCompanyId++;
+    const now = new Date();
+    
+    // Create a company with only the fields defined in the schema
+    const company: Company = {
       id,
+      name: insertCompany.name,
+      industry: insertCompany.industry,
+      location: insertCompany.location,
       address: insertCompany.address ?? null,
       latitude: insertCompany.latitude ?? null,
       longitude: insertCompany.longitude ?? null,
@@ -254,8 +277,9 @@ export class MemStorage implements IStorage {
       size: insertCompany.size ?? null,
       culture: insertCompany.culture ?? []
     };
+    
     this.companies.set(id, company);
-    return company;
+    return { ...company };
   }
 
   async getJobPostings(filters?: FilterOptions): Promise<JobWithCompany[]> {
@@ -289,6 +313,36 @@ export class MemStorage implements IStorage {
           return company && filters.locations!.some(loc => company.location.includes(loc));
         });
       }
+      
+      // Apply skill-based filtering
+      if (filters.skills && filters.skills.length > 0) {
+        const operator = filters.skillOperator || 'OR';
+        jobs = jobs.filter(job => {
+          // Combine both requirements and preferred skills for searching
+          const allJobSkills = [
+            ...(job.requirements || []),
+            ...(job.preferredSkills || [])
+          ].map(skill => skill.toLowerCase());
+          
+          const requiredSkills = (filters.skills || []).map(skill => skill.toLowerCase());
+          
+          if (operator === 'AND') {
+            // All skills must be present in the job's skills
+            return requiredSkills.every(skill => 
+              allJobSkills.some(jobSkill => 
+                jobSkill.includes(skill) || skill.includes(jobSkill)
+              )
+            );
+          } else {
+            // OR: At least one skill must match
+            return requiredSkills.some(skill => 
+              allJobSkills.some(jobSkill => 
+                jobSkill.includes(skill) || skill.includes(jobSkill)
+              )
+            );
+          }
+        });
+      }
     }
 
     return jobs.map(job => ({
@@ -297,12 +351,12 @@ export class MemStorage implements IStorage {
     }));
   }
 
-  async getJobPosting(id: number): Promise<JobWithCompany | undefined> {
+  async getJobPosting(id: number): Promise<JobWithCompany | null> {
     const job = this.jobPostings.get(id);
-    if (!job) return undefined;
+    if (!job) return null;
     
     const company = this.companies.get(job.companyId);
-    if (!company) return undefined;
+    if (!company) return null;
     
     return { ...job, company };
   }
@@ -310,7 +364,7 @@ export class MemStorage implements IStorage {
   async createJobPosting(insertJob: InsertJobPosting): Promise<JobPosting> {
     const id = this.currentJobId++;
     const job: JobPosting = { 
-      ...insertJob,
+      ...insertJob, 
       id,
       requirements: insertJob.requirements ?? [],
       preferredSkills: insertJob.preferredSkills ?? [],
@@ -326,7 +380,7 @@ export class MemStorage implements IStorage {
     return job;
   }
 
-  async incrementJobViewCount(id: number): Promise<void> {
+  async incrementViewCount(id: number): Promise<void> {
     const job = this.jobPostings.get(id);
     if (job && job.viewCount !== null) {
       job.viewCount++;
@@ -334,148 +388,269 @@ export class MemStorage implements IStorage {
     }
   }
 
+  private getTopItems(items: string[], limit: number): Array<{ name: string; count: number }> {
+    const counts = items.reduce((acc, item) => {
+      acc[item] = (acc[item] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    return Object.entries(counts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, limit);
+  }
+
   async getJobStatistics(filters?: FilterOptions): Promise<JobStatistics> {
     const jobs = await this.getJobPostings(filters);
-    const companies = await this.getCompanies();
     
-    const totalJobs = jobs.length;
-    const avgSalary = Math.round(
-      jobs.reduce((sum, job) => sum + ((job.salaryMin || 0) + (job.salaryMax || 0)) / 2, 0) / totalJobs
-    );
+    // Calculate average salary
+    const salaries = jobs.filter(job => job.salaryMin && job.salaryMax)
+      .map(job => (job.salaryMin! + job.salaryMax!) / 2);
+    const avgSalary = salaries.length > 0 
+      ? Math.round(salaries.reduce((a, b) => a + b, 0) / salaries.length) 
+      : 0;
     
-    // Count new jobs (posted in last 7 days)
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    const newJobs = jobs.filter(job => job.postedAt && job.postedAt > weekAgo).length;
+    // Calculate experience level distribution
+    const experienceLevels = jobs.reduce((acc, job) => {
+      const level = job.experienceLevel || 'Not specified';
+      acc[level] = (acc[level] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
     
-    const uniqueCompanies = new Set(jobs.map(job => job.companyId)).size;
+    // Calculate location stats
+    const locations = jobs.reduce((acc, job) => {
+      const location = job.company?.location || 'Remote';
+      acc[location] = (acc[location] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
     
-    // Calculate skill statistics
-    const allRequirements: string[] = [];
-    const allPreferredSkills: string[] = [];
+    // Get top requirements and skills
+    const requirements = jobs.flatMap(job => job.requirements || []);
+    const skills = jobs.flatMap(job => job.preferredSkills || []);
     
-    jobs.forEach(job => {
-      if (job.requirements) {
-        allRequirements.push(...job.requirements);
-      }
-      if (job.preferredSkills) {
-        allPreferredSkills.push(...job.preferredSkills);
-      }
-    });
+    const topRequirements = this.getTopItems(requirements, 5);
+    const topSkills = this.getTopItems(skills, 5);
     
-    const requirementCounts = this.countSkills(allRequirements);
-    const preferredCounts = this.countSkills(allPreferredSkills);
+    // Calculate new jobs (last 7 days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const newJobs = jobs.filter(job => 
+      job.postedAt && job.postedAt >= sevenDaysAgo
+    ).length;
     
-    const topRequirements = Object.entries(requirementCounts)
-      .map(([skill, count]) => ({ skill, percentage: Math.round((count / totalJobs) * 100) }))
-      .sort((a, b) => b.percentage - a.percentage)
-      .slice(0, 10);
-      
-    const topPreferredSkills = Object.entries(preferredCounts)
-      .map(([skill, count]) => ({ skill, percentage: Math.round((count / totalJobs) * 100) }))
-      .sort((a, b) => b.percentage - a.percentage)
-      .slice(0, 10);
-    
-    // Salary distribution
+    // Calculate salary distribution (simplified example)
     const salaryRanges = [
-      { range: "2500-3000", min: 2500, max: 3000 },
-      { range: "3000-4000", min: 3000, max: 4000 },
-      { range: "4000-5000", min: 4000, max: 5000 },
-      { range: "5000-6000", min: 5000, max: 6000 },
-      { range: "6000-7000", min: 6000, max: 7000 },
-      { range: "7000+", min: 7000, max: Infinity }
+      { min: 0, max: 3000, label: '~3,000만원' },
+      { min: 3001, max: 5000, label: '3,001~5,000만원' },
+      { min: 5001, max: 8000, label: '5,001~8,000만원' },
+      { min: 8001, max: 10000, label: '8,001~10,000만원' },
+      { min: 10001, max: Infinity, label: '1억원~' },
     ];
     
     const salaryDistribution = salaryRanges.map(range => ({
-      range: range.range,
-      count: jobs.filter(job => {
-        const avgJobSalary = ((job.salaryMin || 0) + (job.salaryMax || 0)) / 2;
-        return avgJobSalary >= range.min && avgJobSalary < range.max;
-      }).length
+      range: range.label,
+      count: jobs.filter(job => 
+        job.salaryMin && job.salaryMax && 
+        job.salaryMin >= range.min && 
+        job.salaryMax <= range.max
+      ).length
     }));
     
-    // Location statistics
-    const locationCounts: Record<string, number> = {};
-    jobs.forEach(job => {
-      const location = job.company.location;
-      locationCounts[location] = (locationCounts[location] || 0) + 1;
-    });
-    
-    const locationStats = Object.entries(locationCounts)
-      .map(([location, count]) => ({ location, count }))
-      .sort((a, b) => b.count - a.count);
-
     return {
-      totalJobs,
+      totalJobs: jobs.length,
       avgSalary,
       newJobs,
-      companies: uniqueCompanies,
-      topRequirements,
-      topPreferredSkills,
+      companies: new Set(jobs.map(job => job.companyId)).size,
+      topRequirements: topRequirements.map(({ name, count }) => ({
+        skill: name,
+        percentage: Math.round((count / jobs.length) * 100) || 0
+      })),
+      topPreferredSkills: topSkills.map(({ name, count }) => ({
+        skill: name,
+        percentage: Math.round((count / jobs.length) * 100) || 0
+      })),
       salaryDistribution,
-      locationStats
+      locationStats: Object.entries(locations)
+        .map(([location, count]) => ({ location, count }))
+        .sort((a, b) => b.count - a.count)
     };
   }
 
-  private countSkills(skills: string[]): Record<string, number> {
-    const counts: Record<string, number> = {};
-    skills.forEach(skill => {
-      counts[skill] = (counts[skill] || 0) + 1;
-    });
-    return counts;
+  async getMarketTrends(): Promise<MarketTrends> {
+    // Return a copy to prevent external modifications
+    return JSON.parse(JSON.stringify(this.marketTrends));
   }
 
-  async getBookmarks(userId: string): Promise<JobWithCompany[]> {
-    const userBookmarks = Array.from(this.bookmarks.values())
-      .filter(bookmark => bookmark.userId === userId);
+  async createUser(userData: Omit<InsertUser, 'id' | 'createdAt' | 'updatedAt'>): Promise<User> {
+    const id = this.nextUserId++;
+    const hashedPassword = await bcrypt.hash(userData.password, 10);
+    const now = new Date();
     
-    const jobs: JobWithCompany[] = [];
-    for (const bookmark of userBookmarks) {
-      const job = await this.getJobPosting(bookmark.jobId);
-      if (job) {
-        jobs.push(job);
-      }
-    }
+    // Create user with only the fields defined in the schema
+    const newUser: User = {
+      id,
+      username: userData.username,
+      password: hashedPassword,
+      email: `${userData.username}@example.com`, // Generate email from username
+      createdAt: now,
+      updatedAt: now
+    };
     
-    return jobs;
+    this.users.set(id.toString(), newUser);
+    return { ...newUser };
   }
 
   async createBookmark(insertBookmark: InsertBookmark): Promise<Bookmark> {
     const id = this.currentBookmarkId++;
+    const userIdStr = insertBookmark.userId.toString();
+    
     const bookmark: Bookmark = { 
-      ...insertBookmark, 
       id,
+      jobId: insertBookmark.jobId,
+      userId: userIdStr,
       createdAt: new Date()
     };
+    
     this.bookmarks.set(id, bookmark);
-    return bookmark;
+    return { ...bookmark };
   }
 
-  async deleteBookmark(jobId: number, userId: string): Promise<void> {
-    const entries = Array.from(this.bookmarks.entries());
-    for (const [id, bookmark] of entries) {
-      if (bookmark.jobId === jobId && bookmark.userId === userId) {
-        this.bookmarks.delete(id);
-        break;
-      }
-    }
+  async deleteBookmark(id: number): Promise<boolean> {
+    return this.bookmarks.delete(id);
   }
 
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    return this.users.get(id.toString());
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    return Array.from(this.users.values()).find(u => u.username === username);
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentUserId++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async getUserByEmail(email: string): Promise<User | null> {
+    const user = Array.from(this.users.values()).find(u => u.email === email);
+    return user ? { ...user } : null;
+  }
+
+  async getUserById(id: string): Promise<User | null> {
+    const user = this.users.get(id);
+    return user ? { ...user } : null;
+  }
+
+  async validateUser(email: string, password: string): Promise<User | null> {
+    const user = await this.getUserByEmail(email);
+    if (!user) return null;
+    
+    const isValid = await bcrypt.compare(password, user.password);
+    return isValid ? user : null;
+  }
+
+  async getBookmarks(userId: string): Promise<JobPosting[]> {
+    const userBookmarks = Array.from(this.bookmarks.values())
+      .filter(bookmark => bookmark.userId === userId);
+    
+    const jobs = await Promise.all(
+      userBookmarks.map(async bookmark => {
+        const job = await this.getJobPosting(bookmark.jobId);
+        if (!job) return null;
+        return job;
+      })
+    );
+    
+    return jobs.filter((job): job is JobWithCompany => job !== null);
+  }
+
+  async isJobBookmarked(userId: string, jobId: number): Promise<boolean> {
+    return Array.from(this.bookmarks.values())
+      .some(bookmark => bookmark.userId === userId && bookmark.jobId === jobId);
+  }
+
+  async getSavedFilters(userId: string): Promise<SavedFilter[]> {
+    const userIdNum = parseInt(userId, 10);
+    if (isNaN(userIdNum)) return [];
+    
+    return Array.from(this.savedFilters.values())
+      .filter(filter => filter.userId === userIdNum)
+      .sort((a, b) => {
+        // Default filters first, then by most recently updated
+        if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
+        return (b.updatedAt?.getTime() || 0) - (a.updatedAt?.getTime() || 0);
+      });
+  }
+
+  async getSavedFilter(id: number): Promise<SavedFilter | null> {
+    return this.savedFilters.get(id) ?? null;
+  }
+
+  async createSavedFilter(filter: Omit<InsertSavedFilter, 'id' | 'createdAt' | 'updatedAt'>): Promise<SavedFilter> {
+    const now = new Date();
+    
+    const newFilter: SavedFilter = {
+      id: this.nextFilterId++,
+      userId: filter.userId,
+      name: filter.name,
+      filters: filter.filters,
+      isDefault: filter.isDefault || false,
+      createdAt: now,
+      updatedAt: now
+    };
+    
+    // If this is set as default, unset any existing default for this user
+    if (newFilter.isDefault) {
+      for (const [id, f] of this.savedFilters.entries()) {
+        if (f.userId === newFilter.userId && f.isDefault) {
+          this.savedFilters.set(id, { ...f, isDefault: false });
+        }
+      }
+    }
+    
+    this.savedFilters.set(newFilter.id, newFilter);
+    return { ...newFilter };
+  }
+
+  async updateSavedFilter(id: number, updates: Partial<Omit<InsertSavedFilter, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>): Promise<SavedFilter | null> {
+    const existing = this.savedFilters.get(id);
+    if (!existing) return null;
+    
+    const updatedFilter: SavedFilter = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date()
+    };
+    
+    // If this is set as default, unset any existing default for this user
+    if (updates.isDefault === true) {
+      for (const [fid, f] of this.savedFilters.entries()) {
+        if (fid !== id && f.userId === existing.userId && f.isDefault) {
+          this.savedFilters.set(fid, { ...f, isDefault: false });
+        }
+      }
+    }
+    
+    this.savedFilters.set(id, updatedFilter);
+    return { ...updatedFilter };
+  }
+
+  async deleteSavedFilter(id: number): Promise<boolean> {
+    return this.savedFilters.delete(id);
+  }
+
+  async setDefaultFilter(userId: string, id: number): Promise<void> {
+    const userIdNum = parseInt(userId, 10);
+    if (isNaN(userIdNum)) return;
+    
+    const filter = this.savedFilters.get(id);
+    if (!filter || filter.userId !== userIdNum) return;
+    
+    // Unset any existing default for this user
+    for (const [fid, f] of this.savedFilters.entries()) {
+      if (f.userId === userIdNum && f.isDefault) {
+        this.savedFilters.set(fid, { ...f, isDefault: false });
+      }
+    }
+    
+    // Set the new default
+    this.savedFilters.set(id, { ...filter, isDefault: true });
   }
 }
 

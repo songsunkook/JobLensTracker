@@ -68,6 +68,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filters.isRemote = req.query.isRemote === 'true';
       }
       
+      // Handle skills filter
+      if (req.query.skills) {
+        filters.skills = Array.isArray(req.query.skills)
+          ? req.query.skills as string[]
+          : [req.query.skills as string];
+      }
+      
+      // Handle skill operator (defaults to 'OR' if not specified)
+      if (req.query.skillOperator) {
+        filters.skillOperator = req.query.skillOperator as 'AND' | 'OR';
+      }
+      
       const jobs = await storage.getJobPostings(filters);
       res.json(jobs);
     } catch (error) {

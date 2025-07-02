@@ -5,6 +5,9 @@ import { Slider } from "@/components/ui/slider";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Button } from "@/components/ui/button";
 import { FilterState } from "@/lib/types";
+import SkillsFilterDialog from "./skills-filter-dialog";
+import JobSearch from "./job-search";
+import { X } from "lucide-react";
 
 interface FilterPanelProps {
   filters: FilterState;
@@ -28,7 +31,25 @@ const LOCATIONS = [
   "원격근무"
 ];
 
+const SKILLS = [
+  "JavaScript", "TypeScript", "React", "Node.js", "Python", "Java", "Spring",
+  "AWS", "Docker", "Kubernetes", "GraphQL", "Next.js", "NestJS", "Express",
+  "MySQL", "PostgreSQL", "MongoDB", "Redis", "Git", "Jest", "CI/CD"
+];
+
 export default function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
+  const handleSkillsChange = (skills: string[]) => {
+    onFilterChange({ ...filters, skills });
+  };
+
+  const handleJobPositionChange = (jobPosition: string) => {
+    onFilterChange({ ...filters, jobPosition });
+  };
+
+  const handleSkillOperatorChange = (skillOperator: 'AND' | 'OR') => {
+    onFilterChange({ ...filters, skillOperator });
+  };
+
   const handleIndustryChange = (industry: string, checked: boolean) => {
     const newIndustries = checked
       ? [...filters.industries, industry]
@@ -52,13 +73,52 @@ export default function FilterPanel({ filters, onFilterChange }: FilterPanelProp
   };
 
   return (
-    <Card className="sticky top-24">
-      <CardContent className="p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">필터 설정</h2>
+    <Card className="w-full">
+      <CardContent className="p-6 space-y-6">
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium">직군 검색</h3>
+          <JobSearch
+            value={filters.jobPosition || ""}
+            onChange={handleJobPositionChange}
+          />
+        </div>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">필터 설정</h2>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => onFilterChange({
+              industries: [],
+              locations: [],
+              skills: [],
+              salaryMin: undefined,
+              salaryMax: undefined,
+              experienceLevel: undefined,
+              employmentType: undefined,
+              isRemote: undefined,
+              skillOperator: 'OR'
+            })}
+          >
+            <X className="h-4 w-4 mr-1" />
+            초기화
+          </Button>
+        </div>
         
+        {/* Skills Filter */}
+        <div className="space-y-2">
+          <h3 className="font-medium">기술 스택</h3>
+          <SkillsFilterDialog
+            skills={SKILLS}
+            selectedSkills={filters.skills || []}
+            skillOperator={filters.skillOperator || 'OR'}
+            onSkillsChange={handleSkillsChange}
+            onOperatorChange={handleSkillOperatorChange}
+          />
+        </div>
+
         {/* Industry Filter */}
-        <div className="filter-section mb-6">
-          <h3 className="text-sm font-medium text-gray-700 mb-3">산업군</h3>
+        <div className="space-y-2">
+          <h3 className="font-medium">산업군</h3>
           <div className="space-y-2">
             {INDUSTRIES.map((industry) => (
               <div key={industry} className="flex items-center space-x-2">
@@ -71,7 +131,7 @@ export default function FilterPanel({ filters, onFilterChange }: FilterPanelProp
                 />
                 <Label 
                   htmlFor={`industry-${industry}`}
-                  className="text-sm text-gray-600 cursor-pointer"
+                  className="text-sm cursor-pointer"
                 >
                   {industry}
                 </Label>
@@ -80,52 +140,9 @@ export default function FilterPanel({ filters, onFilterChange }: FilterPanelProp
           </div>
         </div>
 
-        {/* Salary Range Filter */}
-        <div className="filter-section mb-6">
-          <h3 className="text-sm font-medium text-gray-700 mb-3">연봉 범위</h3>
-          <div className="space-y-4">
-            <div>
-              <Label className="text-xs text-gray-500">최소 연봉 (만원)</Label>
-              <Slider
-                value={[filters.salaryMin]}
-                onValueChange={handleSalaryMinChange}
-                min={2500}
-                max={8000}
-                step={100}
-                className="mt-2"
-              />
-              <div className="flex justify-between text-xs text-gray-400 mt-1">
-                <span>2,500</span>
-                <span className="font-medium text-primary">
-                  {filters.salaryMin.toLocaleString()}
-                </span>
-                <span>8,000</span>
-              </div>
-            </div>
-            <div>
-              <Label className="text-xs text-gray-500">최대 연봉 (만원)</Label>
-              <Slider
-                value={[filters.salaryMax]}
-                onValueChange={handleSalaryMaxChange}
-                min={3000}
-                max={10000}
-                step={100}
-                className="mt-2"
-              />
-              <div className="flex justify-between text-xs text-gray-400 mt-1">
-                <span>3,000</span>
-                <span className="font-medium text-primary">
-                  {filters.salaryMax.toLocaleString()}
-                </span>
-                <span>10,000+</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Location Filter */}
-        <div className="filter-section mb-6">
-          <h3 className="text-sm font-medium text-gray-700 mb-3">지역</h3>
+        <div className="space-y-2">
+          <h3 className="font-medium">지역</h3>
           <div className="space-y-2">
             {LOCATIONS.map((location) => (
               <div key={location} className="flex items-center space-x-2">
@@ -138,7 +155,7 @@ export default function FilterPanel({ filters, onFilterChange }: FilterPanelProp
                 />
                 <Label 
                   htmlFor={`location-${location}`}
-                  className="text-sm text-gray-600 cursor-pointer"
+                  className="text-sm cursor-pointer"
                 >
                   {location}
                 </Label>
@@ -147,49 +164,107 @@ export default function FilterPanel({ filters, onFilterChange }: FilterPanelProp
           </div>
         </div>
 
+        {/* Salary Range Filter */}
+        <div className="space-y-2">
+          <h3 className="font-medium">연봉 범위 (만원)</h3>
+          <div className="px-2">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-muted-foreground">
+                {filters.salaryMin?.toLocaleString() || '0'}
+              </span>
+              <span className="text-sm text-muted-foreground">
+                {filters.salaryMax?.toLocaleString() || '10,000+'}
+              </span>
+            </div>
+            <Slider
+              value={[filters.salaryMin || 0, filters.salaryMax || 10000]}
+              onValueChange={([min, max]) => {
+                onFilterChange({
+                  salaryMin: min,
+                  salaryMax: max
+                });
+              }}
+              min={0}
+              max={10000}
+              step={100}
+              minStepsBetweenThumbs={1}
+            />
+          </div>
+        </div>
+
         {/* Experience Level */}
-        <div className="filter-section mb-6">
-          <h3 className="text-sm font-medium text-gray-700 mb-3">경력 구분</h3>
-          <RadioGroup 
-            value={filters.experienceLevel} 
-            onValueChange={(value) => onFilterChange({ experienceLevel: value })}
+        <div className="space-y-2">
+          <h3 className="font-medium">경력</h3>
+          <RadioGroup
+            value={filters.experienceLevel || ''}
+            onValueChange={(value) => onFilterChange({ experienceLevel: value || undefined })}
           >
             <div className="flex items-center space-x-2">
-              <RadioGroupItem value="all" id="exp-all" />
-              <Label htmlFor="exp-all" className="text-sm text-gray-600 cursor-pointer">
+              <RadioGroupItem value="" id="exp-all" />
+              <Label htmlFor="exp-all" className="text-sm cursor-pointer">
                 전체
               </Label>
             </div>
             <div className="flex items-center space-x-2">
-              <RadioGroupItem value="entry" id="exp-entry" />
-              <Label htmlFor="exp-entry" className="text-sm text-gray-600 cursor-pointer">
+              <RadioGroupItem value="newcomer" id="exp-newcomer" />
+              <Label htmlFor="exp-newcomer" className="text-sm cursor-pointer">
                 신입
               </Label>
             </div>
             <div className="flex items-center space-x-2">
-              <RadioGroupItem value="junior" id="exp-junior" />
-              <Label htmlFor="exp-junior" className="text-sm text-gray-600 cursor-pointer">
-                경력 (1-3년)
-              </Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="senior" id="exp-senior" />
-              <Label htmlFor="exp-senior" className="text-sm text-gray-600 cursor-pointer">
-                시니어 (3년+)
+              <RadioGroupItem value="mid" id="exp-mid" />
+              <Label htmlFor="exp-mid" className="text-sm cursor-pointer">
+                경력
               </Label>
             </div>
           </RadioGroup>
         </div>
 
-        <Button 
-          className="w-full bg-primary hover:bg-primary-600 text-white font-medium"
-          onClick={() => {
-            // Trigger a refresh of data with current filters
-            window.location.reload();
-          }}
-        >
-          필터 적용하기
-        </Button>
+        {/* Employment Type */}
+        <div className="space-y-2">
+          <h3 className="font-medium">고용 형태</h3>
+          <RadioGroup
+            value={filters.employmentType || ''}
+            onValueChange={(value) => onFilterChange({ employmentType: value || undefined })}
+          >
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="" id="emp-all" />
+              <Label htmlFor="emp-all" className="text-sm cursor-pointer">
+                전체
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="full-time" id="emp-fulltime" />
+              <Label htmlFor="emp-fulltime" className="text-sm cursor-pointer">
+                정규직
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="contract" id="emp-contract" />
+              <Label htmlFor="emp-contract" className="text-sm cursor-pointer">
+                계약직
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="intern" id="emp-intern" />
+              <Label htmlFor="emp-intern" className="text-sm cursor-pointer">
+                인턴
+              </Label>
+            </div>
+          </RadioGroup>
+        </div>
+
+        {/* Remote Work */}
+        <div className="flex items-center space-x-2 pt-2">
+          <Checkbox
+            id="remote-work"
+            checked={filters.isRemote || false}
+            onCheckedChange={(checked) => onFilterChange({ isRemote: checked as boolean })}
+          />
+          <Label htmlFor="remote-work" className="text-sm cursor-pointer">
+            원격근무 가능
+          </Label>
+        </div>
       </CardContent>
     </Card>
   );

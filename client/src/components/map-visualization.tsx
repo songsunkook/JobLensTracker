@@ -5,6 +5,7 @@ import { FilterState, CompanyMarker } from "@/lib/types";
 import { JobWithCompany } from "@shared/schema";
 import { Progress } from "@/components/ui/progress";
 import { MapIcon } from "lucide-react";
+import TrendingSkills from "./trending-skills";
 
 // Declare Leaflet types
 declare global {
@@ -253,6 +254,11 @@ export default function MapVisualization({ filters }: MapVisualizationProps) {
               </div>
             ))}
           </div>
+        </div>
+        
+        {/* Trending Skills Section */}
+        <div className="mt-8">
+          <TrendingSkills />
         </div>
       </CardContent>
     </Card>

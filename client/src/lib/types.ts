@@ -1,3 +1,5 @@
+export type SkillFilterOperator = 'AND' | 'OR';
+
 export interface FilterState {
   industries: string[];
   salaryMin: number;
@@ -6,6 +8,9 @@ export interface FilterState {
   experienceLevel: string;
   employmentType: string;
   isRemote?: boolean;
+  skills: string[];
+  skillOperator: SkillFilterOperator;
+  jobPosition: string;
 }
 
 export interface CompanyMarker {

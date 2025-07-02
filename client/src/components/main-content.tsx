@@ -39,6 +39,9 @@ export default function MainContent({ filters }: MainContentProps) {
     if (filters.isRemote !== undefined) {
       params.append('isRemote', filters.isRemote.toString());
     }
+    if (filters.jobPosition) {
+      params.append('jobPosition', filters.jobPosition);
+    }
     
     return params.toString();
   };
