@@ -4,7 +4,11 @@ class KeywordsManager {
     this.elements = {
       keywordsCard: document.getElementById('keywordsCard'),
       requirementTags: document.getElementById('requirementTags'),
-      preferredTags: document.getElementById('preferredTags')
+      preferredTags: document.getElementById('preferredTags'),
+      techStackTags: document.getElementById('techStackTags'),
+      nonTechTags: document.getElementById('nonTechTags'),
+      trendingTechTags: document.getElementById('trendingTechTags'),
+      marketTrends: document.getElementById('marketTrends')
     };
   }
 

@@ -3,18 +3,25 @@ import {
   jobPostings, 
   bookmarks, 
   users,
+  sessions,
+  savedFilters,
   type Company, 
   type JobPosting, 
   type Bookmark,
   type User,
+  type Session,
+  type SavedFilter,
   type InsertCompany, 
   type InsertJobPosting, 
   type InsertBookmark,
   type InsertUser,
+  type InsertSession,
+  type InsertSavedFilter,
   type JobWithCompany,
   type FilterOptions,
   type JobStatistics
 } from "@shared/schema";
+import { nanoid } from "nanoid";
 
 export interface IStorage {
   // Company methods
@@ -27,6 +34,7 @@ export interface IStorage {
   getJobPosting(id: number): Promise<JobWithCompany | undefined>;
   createJobPosting(job: InsertJobPosting): Promise<JobPosting>;
   incrementJobViewCount(id: number): Promise<void>;
+  searchJobCategories(query: string): Promise<string[]>;
   
   // Statistics methods
   getJobStatistics(filters?: FilterOptions): Promise<JobStatistics>;
@@ -40,6 +48,17 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  authenticateUser(username: string, password: string): Promise<User | null>;
+  
+  // Session methods
+  createSession(userId: number): Promise<Session>;
+  getSession(sessionId: string): Promise<Session | undefined>;
+  deleteSession(sessionId: string): Promise<void>;
+  
+  // Saved filter methods
+  getSavedFilters(userId: number): Promise<SavedFilter[]>;
+  saveSavedFilter(filter: InsertSavedFilter): Promise<SavedFilter>;
+  deleteSavedFilter(id: number, userId: number): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -47,20 +66,26 @@ export class MemStorage implements IStorage {
   private jobPostings: Map<number, JobPosting>;
   private bookmarks: Map<number, Bookmark>;
   private users: Map<number, User>;
+  private sessions: Map<string, Session>;
+  private savedFilters: Map<number, SavedFilter>;
   private currentCompanyId: number;
   private currentJobId: number;
   private currentBookmarkId: number;
   private currentUserId: number;
+  private currentSavedFilterId: number;
 
   constructor() {
     this.companies = new Map();
     this.jobPostings = new Map();
     this.bookmarks = new Map();
     this.users = new Map();
+    this.sessions = new Map();
+    this.savedFilters = new Map();
     this.currentCompanyId = 1;
     this.currentJobId = 1;
     this.currentBookmarkId = 1;
     this.currentUserId = 1;
+    this.currentSavedFilterId = 1;
     
     this.initializeData();
   }
@@ -146,7 +171,7 @@ export class MemStorage implements IStorage {
       this.createCompany(company);
     });
 
-    // Initialize job postings
+    // Initialize job postings with enhanced data
     const initialJobs: InsertJobPosting[] = [
       {
         companyId: 1, // 카카오페이
@@ -154,6 +179,9 @@ export class MemStorage implements IStorage {
         description: "React 기반 웹 서비스 개발",
         requirements: ["JavaScript", "React", "TypeScript", "HTML/CSS"],
         preferredSkills: ["Next.js", "Redux", "Webpack", "Jest"],
+        techStack: ["React", "TypeScript", "Node.js", "Webpack"],
+        nonTechRequirements: ["대용량 트래픽 처리 경험", "금융권 개발 경험", "협업 도구 사용 경험"],
+        jobCategory: "프론트엔드 개발자",
         salaryMin: 4000,
         salaryMax: 6000,
         experienceLevel: "junior",
@@ -167,6 +195,9 @@ export class MemStorage implements IStorage {
         description: "대규모 트래픽 처리 시스템 개발",
         requirements: ["Java", "Spring Boot", "MySQL", "Redis"],
         preferredSkills: ["Kafka", "Kubernetes", "MSA", "AWS"],
+        techStack: ["Java", "Spring Boot", "MySQL", "Redis", "Kafka"],
+        nonTechRequirements: ["대용량 데이터 처리 경험", "MSA 아키텍처 설계 경험", "금융 도메인 이해"],
+        jobCategory: "백엔드 개발자",
         salaryMin: 5000,
         salaryMax: 8000,
         experienceLevel: "mid",
@@ -180,6 +211,9 @@ export class MemStorage implements IStorage {
         description: "클라우드 인프라 관리 및 자동화",
         requirements: ["AWS", "Docker", "Kubernetes", "Linux"],
         preferredSkills: ["Terraform", "Jenkins", "Prometheus", "Grafana"],
+        techStack: ["AWS", "Docker", "Kubernetes", "Terraform", "Jenkins"],
+        nonTechRequirements: ["클라우드 운영 경험", "24시간 온콜 가능", "장애 대응 경험"],
+        jobCategory: "DevOps 엔지니어",
         salaryMin: 4500,
         salaryMax: 7000,
         experienceLevel: "mid",
@@ -193,6 +227,9 @@ export class MemStorage implements IStorage {
         description: "머신러닝 모델 개발 및 서비스 적용",
         requirements: ["Python", "TensorFlow", "PyTorch", "SQL"],
         preferredSkills: ["MLOps", "Kubeflow", "Docker", "Spark"],
+        techStack: ["Python", "TensorFlow", "PyTorch", "MLOps", "Kubeflow"],
+        nonTechRequirements: ["논문 리딩 능력", "대용량 데이터 처리 경험", "연구 개발 경험"],
+        jobCategory: "AI 엔지니어",
         salaryMin: 5500,
         salaryMax: 9000,
         experienceLevel: "senior",
@@ -206,6 +243,9 @@ export class MemStorage implements IStorage {
         description: "라인 메신저 iOS 앱 개발",
         requirements: ["Swift", "iOS SDK", "Objective-C", "Git"],
         preferredSkills: ["SwiftUI", "Combine", "RxSwift", "Fastlane"],
+        techStack: ["Swift", "iOS SDK", "SwiftUI", "Combine"],
+        nonTechRequirements: ["앱스토어 출시 경험", "UI/UX 디자인 이해", "글로벌 서비스 개발 경험"],
+        jobCategory: "모바일 개발자",
         salaryMin: 4500,
         salaryMax: 7500,
         experienceLevel: "mid",
@@ -219,12 +259,47 @@ export class MemStorage implements IStorage {
         description: "대용량 데이터 파이프라인 구축",
         requirements: ["Python", "Spark", "Hadoop", "SQL"],
         preferredSkills: ["Airflow", "Kafka", "Elasticsearch", "AWS"],
+        techStack: ["Python", "Spark", "Hadoop", "Kafka", "Airflow"],
+        nonTechRequirements: ["대용량 데이터 처리 경험", "실시간 스트리밍 처리 경험", "이커머스 도메인 이해"],
+        jobCategory: "데이터 엔지니어",
         salaryMin: 5000,
         salaryMax: 8500,
         experienceLevel: "mid",
         employmentType: "full-time",
         isRemote: false,
         deadline: new Date("2025-08-05")
+      },
+      {
+        companyId: 1, // 카카오페이
+        title: "데이터 사이언티스트",
+        description: "금융 데이터 분석 및 모델링",
+        requirements: ["Python", "R", "SQL", "통계학"],
+        preferredSkills: ["Pandas", "Scikit-learn", "Tableau", "BigQuery"],
+        techStack: ["Python", "R", "SQL", "Pandas", "Scikit-learn"],
+        nonTechRequirements: ["금융 도메인 지식", "비즈니스 이해력", "커뮤니케이션 능력"],
+        jobCategory: "데이터 사이언티스트",
+        salaryMin: 4500,
+        salaryMax: 7500,
+        experienceLevel: "mid",
+        employmentType: "full-time",
+        isRemote: false,
+        deadline: new Date("2025-08-10")
+      },
+      {
+        companyId: 2, // 토스
+        title: "수학 강사",
+        description: "토스 교육 플랫폼 수학 콘텐츠 제작",
+        requirements: ["수학 전공", "교육 경험", "콘텐츠 제작 능력"],
+        preferredSkills: ["온라인 강의 경험", "교재 개발", "학습자 데이터 분석"],
+        techStack: [],
+        nonTechRequirements: ["교육 열정", "학습자 중심 사고", "창의적 문제 해결"],
+        jobCategory: "수학 강사",
+        salaryMin: 3500,
+        salaryMax: 5500,
+        experienceLevel: "mid",
+        employmentType: "full-time",
+        isRemote: true,
+        deadline: new Date("2025-07-30")
       }
     ];
 
@@ -289,6 +364,35 @@ export class MemStorage implements IStorage {
           return company && filters.locations!.some(loc => company.location.includes(loc));
         });
       }
+      if (filters.techStack && filters.techStack.length > 0) {
+        jobs = jobs.filter(job => {
+          if (!job.techStack || job.techStack.length === 0) return false;
+          
+          if (filters.techStackOperation === 'AND') {
+            // All specified tech must be present
+            return filters.techStack!.every(tech => job.techStack!.includes(tech));
+          } else {
+            // At least one specified tech must be present (OR operation)
+            return filters.techStack!.some(tech => job.techStack!.includes(tech));
+          }
+        });
+      }
+      if (filters.jobCategory) {
+        jobs = jobs.filter(job => 
+          job.jobCategory?.toLowerCase().includes(filters.jobCategory!.toLowerCase()) ||
+          job.title.toLowerCase().includes(filters.jobCategory!.toLowerCase())
+        );
+      }
+      if (filters.nonTechRequirements && filters.nonTechRequirements.length > 0) {
+        jobs = jobs.filter(job => {
+          if (!job.nonTechRequirements || job.nonTechRequirements.length === 0) return false;
+          return filters.nonTechRequirements!.some(req => 
+            job.nonTechRequirements!.some(jobReq => 
+              jobReq.toLowerCase().includes(req.toLowerCase())
+            )
+          );
+        });
+      }
     }
 
     return jobs.map(job => ({
@@ -314,6 +418,9 @@ export class MemStorage implements IStorage {
       id,
       requirements: insertJob.requirements ?? [],
       preferredSkills: insertJob.preferredSkills ?? [],
+      techStack: insertJob.techStack ?? null,
+      nonTechRequirements: insertJob.nonTechRequirements ?? null,
+      jobCategory: insertJob.jobCategory ?? null,
       salaryMin: insertJob.salaryMin ?? null,
       salaryMax: insertJob.salaryMax ?? null,
       isRemote: insertJob.isRemote ?? false,
@@ -405,6 +512,52 @@ export class MemStorage implements IStorage {
       .map(([location, count]) => ({ location, count }))
       .sort((a, b) => b.count - a.count);
 
+    // Calculate tech stack statistics
+    const techStackCounts: Record<string, number> = {};
+    const nonTechCounts: Record<string, number> = {};
+    
+    jobs.forEach((job: JobPosting) => {
+      job.techStack?.forEach((tech: string) => {
+        techStackCounts[tech] = (techStackCounts[tech] || 0) + 1;
+      });
+      job.nonTechRequirements?.forEach((req: string) => {
+        nonTechCounts[req] = (nonTechCounts[req] || 0) + 1;
+      });
+    });
+
+    const topTechStack = Object.entries(techStackCounts)
+      .map(([tech, count]) => ({ tech, percentage: Math.round((count / totalJobs) * 100) }))
+      .sort((a, b) => b.percentage - a.percentage)
+      .slice(0, 10);
+
+    const topNonTechRequirements = Object.entries(nonTechCounts)
+      .map(([requirement, count]) => ({ requirement, percentage: Math.round((count / totalJobs) * 100) }))
+      .sort((a, b) => b.percentage - a.percentage)
+      .slice(0, 10);
+
+    // Mock trending data - in real app, this would compare with historical data
+    const trendingTechStack = topTechStack.slice(0, 5).map(item => ({
+      tech: item.tech,
+      growth: Math.floor(Math.random() * 30) + 5, // Mock growth percentage
+      popularity: item.percentage
+    }));
+
+    const jobCategoryStats: Record<string, number> = {};
+    jobs.forEach((job: JobPosting) => {
+      if (job.jobCategory) {
+        jobCategoryStats[job.jobCategory] = (jobCategoryStats[job.jobCategory] || 0) + 1;
+      }
+    });
+
+    const jobCategoryTrends = Object.entries(jobCategoryStats)
+      .map(([category, count]) => ({
+        category,
+        count,
+        growth: Math.floor(Math.random() * 25) + 5 // Mock growth
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
     return {
       totalJobs,
       avgSalary,
@@ -412,8 +565,12 @@ export class MemStorage implements IStorage {
       companies: uniqueCompanies,
       topRequirements,
       topPreferredSkills,
+      topTechStack,
+      topNonTechRequirements,
       salaryDistribution,
-      locationStats
+      locationStats,
+      trendingTechStack,
+      jobCategoryTrends
     };
   }
 
@@ -473,9 +630,85 @@ export class MemStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.currentUserId++;
-    const user: User = { ...insertUser, id };
+    const user: User = { 
+      ...insertUser, 
+      id,
+      email: insertUser.email ?? null,
+      createdAt: new Date()
+    };
     this.users.set(id, user);
     return user;
+  }
+
+  async searchJobCategories(query: string): Promise<string[]> {
+    const categories = new Set<string>();
+    
+    Array.from(this.jobPostings.values()).forEach(job => {
+      if (job.jobCategory && job.jobCategory.toLowerCase().includes(query.toLowerCase())) {
+        categories.add(job.jobCategory);
+      }
+      if (job.title.toLowerCase().includes(query.toLowerCase())) {
+        categories.add(job.title);
+      }
+    });
+    
+    return Array.from(categories).slice(0, 10);
+  }
+
+  async authenticateUser(username: string, password: string): Promise<User | null> {
+    const user = Array.from(this.users.values()).find(u => u.username === username);
+    if (user && user.password === password) {
+      return user;
+    }
+    return null;
+  }
+
+  async createSession(userId: number): Promise<Session> {
+    const sessionId = nanoid();
+    const session: Session = {
+      id: sessionId,
+      userId,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+    };
+    this.sessions.set(sessionId, session);
+    return session;
+  }
+
+  async getSession(sessionId: string): Promise<Session | undefined> {
+    const session = this.sessions.get(sessionId);
+    if (session && session.expiresAt > new Date()) {
+      return session;
+    }
+    if (session) {
+      this.sessions.delete(sessionId);
+    }
+    return undefined;
+  }
+
+  async deleteSession(sessionId: string): Promise<void> {
+    this.sessions.delete(sessionId);
+  }
+
+  async getSavedFilters(userId: number): Promise<SavedFilter[]> {
+    return Array.from(this.savedFilters.values()).filter(f => f.userId === userId);
+  }
+
+  async saveSavedFilter(filter: InsertSavedFilter): Promise<SavedFilter> {
+    const id = this.currentSavedFilterId++;
+    const savedFilter: SavedFilter = {
+      ...filter,
+      id,
+      createdAt: new Date()
+    };
+    this.savedFilters.set(id, savedFilter);
+    return savedFilter;
+  }
+
+  async deleteSavedFilter(id: number, userId: number): Promise<void> {
+    const filter = this.savedFilters.get(id);
+    if (filter && filter.userId === userId) {
+      this.savedFilters.delete(id);
+    }
   }
 }
 

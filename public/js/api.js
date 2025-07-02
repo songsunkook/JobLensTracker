@@ -46,6 +46,20 @@ class API {
       params.append('isRemote', filters.isRemote.toString());
     }
     
+    // New filter parameters
+    if (filters.techStack && filters.techStack.length > 0) {
+      filters.techStack.forEach(tech => params.append('techStack', tech));
+    }
+    if (filters.techStackOperation) {
+      params.append('techStackOperation', filters.techStackOperation);
+    }
+    if (filters.jobCategory) {
+      params.append('jobCategory', filters.jobCategory);
+    }
+    if (filters.nonTechRequirements && filters.nonTechRequirements.length > 0) {
+      filters.nonTechRequirements.forEach(req => params.append('nonTechRequirements', req));
+    }
+    
     return params.toString();
   }
 
