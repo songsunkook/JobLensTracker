@@ -1,5 +1,21 @@
-import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
+import { promisify } from 'util';
+import { scrypt, randomBytes } from 'crypto';
+
+const scryptAsync = promisify(scrypt);
+
+// Password hashing utilities
+async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(16).toString('hex');
+  const derivedKey = await scryptAsync(password, salt, 64) as Buffer;
+  return `${derivedKey.toString('hex')}.${salt}`;
+}
+
+async function comparePasswords(storedPassword: string, suppliedPassword: string): Promise<boolean> {
+  const [hashedPassword, salt] = storedPassword.split('.');
+  const derivedKey = await scryptAsync(suppliedPassword, salt, 64) as Buffer;
+  return hashedPassword === derivedKey.toString('hex');
+}
 import { 
   Company, 
   InsertCompany, 
@@ -483,7 +499,7 @@ export class MemStorage implements IStorage {
 
   async createUser(userData: Omit<InsertUser, 'id' | 'createdAt' | 'updatedAt'>): Promise<User> {
     const id = this.nextUserId++;
-    const hashedPassword = await bcrypt.hash(userData.password, 10);
+    const hashedPassword = await hashPassword(userData.password);
     const now = new Date();
     
     // Create user with only the fields defined in the schema
@@ -541,7 +557,7 @@ export class MemStorage implements IStorage {
     const user = await this.getUserByEmail(email);
     if (!user) return null;
     
-    const isValid = await bcrypt.compare(password, user.password);
+    const isValid = await comparePasswords(user.password, password);
     return isValid ? user : null;
   }
 
