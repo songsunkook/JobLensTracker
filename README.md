@@ -2,8 +2,7 @@
 
 ## 🚀 배포 URL
 
-~~GitHub Pages: [https://songsunkook.github.io/JobLensTracker/](https://songsunkook.github.io/JobLensTracker/)~~  
-Github Page 이슈로 배포하지 못하고 있는 점 양해 부탁드립니다 🙇‍♂️  
+https://94608bd3-3859-4dcd-a981-8cf21ae31677-00-2qk5i6jl6g0ca.janeway.replit.dev/
   
 <img width="1920" alt="image" src="https://github.com/user-attachments/assets/9ee5189a-0a7f-4e60-9032-f2c1cab9bca8" />
 <img width="1920" alt="image" src="https://github.com/user-attachments/assets/14b5caa2-55e4-4194-a554-52d676bc6dc5" />
